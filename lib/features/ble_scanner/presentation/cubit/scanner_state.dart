@@ -14,5 +14,9 @@ final class ScannerSuccess extends ScannerState {
 
 final class ScannerFailure extends ScannerState {
   final String errorMessage;
-  ScannerFailure({required this.errorMessage});
+  final bool isPermissionError;
+  ScannerFailure({
+    required this.errorMessage,
+    this.isPermissionError = false,
+  });
 }

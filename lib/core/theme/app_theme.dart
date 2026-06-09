@@ -5,7 +5,7 @@ class AppTheme {
   static const Color _lightPrimary = Colors.black;
   static const Color _darkBackground = Color(0xFF121212);
   static const Color _darkPrimary = Color(0xFFFAFAFA);
-  static const Color _accent = Colors.blueAccent;
+  static const Color _accent = Color.fromARGB(255, 96, 154, 255);
 
   static ThemeData get lightTheme {
     return ThemeData(

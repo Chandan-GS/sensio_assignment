@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/scanner_cubit.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/cubit/theme_cubit.dart';
 
@@ -17,10 +19,15 @@ class SensioAssignmentApp extends StatelessWidget {
       child: BlocBuilder<ThemeCubit, ThemeMode>(
         builder: (context, themeMode) {
           return MaterialApp(
+            debugShowCheckedModeBanner: false,
             title: 'Sensio Assignment',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeMode,
+            home: BlocProvider(
+              create: (context) => ScannerCubit(),
+              child: const ScannerPage(),
+            ),
           );
         },
       ),
