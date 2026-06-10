@@ -68,15 +68,12 @@ class BleRepository {
     await _ble.writeCharacteristicWithoutResponse(characteristic, value: value);
   }
 
-  // ── GATT Utilities ────────────────────────────────────────────────────────────
-
-  static const _kVitalsServiceUuids = {
-    '0000180d00001000800000805f9b34fb', // single service containing all vitals
-  };
+  static const _kVitalsServiceUuids = {'0000180d00001000800000805f9b34fb'};
 
   String cleanUuid(String uuid) => uuid.toLowerCase().replaceAll('-', '');
 
-  bool isVitalsService(String uuid) => _kVitalsServiceUuids.contains(cleanUuid(uuid));
+  bool isVitalsService(String uuid) =>
+      _kVitalsServiceUuids.contains(cleanUuid(uuid));
 
   String getGattName(String uuid) {
     final u = cleanUuid(uuid);

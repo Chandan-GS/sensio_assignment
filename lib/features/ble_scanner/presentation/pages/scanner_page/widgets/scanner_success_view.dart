@@ -19,11 +19,7 @@ class ScannerSuccessView extends StatelessWidget {
         child: Text(
           'No devices found yet.\nSearching...',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
-            height: 1.5,
-          ),
+          style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
         ),
       );
     }

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sensio_assignment/features/ble_scanner/repository/ble_repository.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page/screens/scanner_screen.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/scanner_cubit.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/device_details_cubit.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/cubit/theme_cubit.dart';
 
@@ -17,8 +18,15 @@ class SensioAssignmentApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepositoryProvider(
       create: (context) => BleRepository(),
-      child: BlocProvider(
-        create: (context) => ThemeCubit(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (context) => ThemeCubit()),
+          BlocProvider(
+            create: (context) => DeviceDetailsCubit(
+              bleRepository: RepositoryProvider.of<BleRepository>(context),
+            ),
+          ),
+        ],
         child: BlocBuilder<ThemeCubit, ThemeMode>(
           builder: (context, themeMode) {
             return MaterialApp(

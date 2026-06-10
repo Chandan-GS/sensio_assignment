@@ -16,13 +16,7 @@ class DeviceDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => DeviceDetailsCubit(
-        bleRepository: RepositoryProvider.of<BleRepository>(context),
-        deviceId: device.id,
-      ),
-      child: DeviceDetailsView(device: device),
-    );
+    return DeviceDetailsView(device: device);
   }
 }
 
@@ -57,6 +51,10 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: InkWell(
+          onTap: () => Navigator.pop(context),
+          child: Icon(Icons.arrow_back_ios_new_rounded),
+        ),
         scrolledUnderElevation: 0,
         title: Text(
           widget.device.name,
@@ -132,7 +130,7 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () =>
-                          context.read<DeviceDetailsCubit>().connect(),
+                          context.read<DeviceDetailsCubit>().connect(widget.device),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
                         foregroundColor: theme.colorScheme.onPrimary,
@@ -176,7 +174,7 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () =>
-                          context.read<DeviceDetailsCubit>().connect(),
+                          context.read<DeviceDetailsCubit>().connect(widget.device),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
                         foregroundColor: theme.colorScheme.onPrimary,
@@ -278,10 +276,23 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
                                 context.read<DeviceDetailsCubit>().disconnect(),
                             style: ElevatedButton.styleFrom(
                               elevation: 0,
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                255,
+                                85,
+                                73,
+                              ),
+                              foregroundColor: const Color.fromARGB(
+                                255,
+                                0,
+                                0,
+                                0,
+                              ),
                             ),
-                            child: const Text('Disconnect'),
+                            child: const Text(
+                              'Disconnect',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
                           ),
                         ),
                       ],
@@ -289,7 +300,6 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
                   ),
                 ),
 
-                // ── Live Vitals charts ────────────────────────────────────
                 if (activeNotifyIds.isNotEmpty) ...[
                   _sectionHeader('Live Vitals', theme),
                   ...activeNotifyIds.map((uuid) {

@@ -3,34 +3,40 @@ import 'package:bloc/bloc.dart';
 import 'package:meta/meta.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:sensio_assignment/features/ble_scanner/repository/ble_repository.dart';
+import 'package:sensio_assignment/features/ble_scanner/data/models/ble_device_model.dart';
 
 part 'device_details_state.dart';
 
 class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
   final BleRepository _bleRepository;
-  final String deviceId;
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
   final Map<Uuid, StreamSubscription<List<int>>> _notificationSubscriptions =
       {};
 
-  DeviceDetailsCubit({
-    required BleRepository bleRepository,
-    required this.deviceId,
-  }) : _bleRepository = bleRepository,
-       super(DeviceDetailsInitial()) {
-    connect();
-  }
+  DeviceDetailsCubit({required BleRepository bleRepository})
+    : _bleRepository = bleRepository,
+      super(const DeviceDetailsInitial());
 
-  void connect() {
-    emit(DeviceDetailsConnecting());
+  void connect(BleDeviceModel device) async {
+    // If we're already connected to a different device, disconnect first
+    if (state.device != null && state.device!.id != device.id) {
+      await disconnect();
+    }
+
+    // If we're already connected to the same device, no-op
+    if (state is DeviceDetailsConnected && state.device?.id == device.id) {
+      return;
+    }
+
+    emit(DeviceDetailsConnecting(device: device));
     _connectionSubscription?.cancel();
     _connectionSubscription = _bleRepository
-        .connectToDevice(deviceId)
+        .connectToDevice(device.id)
         .listen(
           (update) async {
             switch (update.connectionState) {
               case DeviceConnectionState.connecting:
-                emit(DeviceDetailsConnecting());
+                emit(DeviceDetailsConnecting(device: device));
                 break;
               case DeviceConnectionState.connected:
                 try {
@@ -38,33 +44,43 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
                   await Future.delayed(const Duration(milliseconds: 1000));
 
                   final services = await _bleRepository.discoverServices(
-                    deviceId,
+                    device.id,
                   );
-                  emit(DeviceDetailsConnected(services: services));
+                  emit(
+                    DeviceDetailsConnected(device: device, services: services),
+                  );
                 } catch (e) {
-                  emit(DeviceDetailsFailure('Failed to discover services: $e'));
+                  emit(
+                    DeviceDetailsFailure(
+                      'Failed to discover services: $e',
+                      device: device,
+                    ),
+                  );
                 }
                 break;
               case DeviceConnectionState.disconnecting:
-                emit(DeviceDetailsDisconnecting());
+                emit(DeviceDetailsDisconnecting(device: device));
                 break;
               case DeviceConnectionState.disconnected:
                 _cancelAllSubscriptions();
-                emit(DeviceDetailsDisconnected());
+                emit(DeviceDetailsDisconnected(device: device));
                 break;
             }
           },
           onError: (error) {
-            emit(DeviceDetailsFailure('Connection error: $error'));
+            emit(
+              DeviceDetailsFailure('Connection error: $error', device: device),
+            );
           },
         );
   }
 
   Future<void> disconnect() async {
-    emit(DeviceDetailsDisconnecting());
+    final currentDevice = state.device;
+    emit(DeviceDetailsDisconnecting(device: currentDevice));
     _cancelAllSubscriptions();
     await _connectionSubscription?.cancel();
-    emit(DeviceDetailsDisconnected());
+    emit(DeviceDetailsDisconnected(device: currentDevice));
   }
 
   Future<void> readCharacteristicValue(
