@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/scanner_cubit.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_failure_view.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_initial_view.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_running_view.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_success_view.dart';
 
 class ScannerPage extends StatelessWidget {
   const ScannerPage({super.key});
@@ -55,6 +57,7 @@ class ScannerPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        scrolledUnderElevation: 0,
         centerTitle: true,
         title: const Text(
           "BlueNode",
@@ -89,13 +92,14 @@ class ScannerPage extends StatelessWidget {
               return const ScannerRunningView();
             }
             if (state is ScannerSuccess) {
-              return ListView.builder(
-                itemCount: state.devices.length,
-                itemBuilder: (context, index) {
-                  final device = state.devices[index];
-                  return ListTile(
-                    title: Text(device.name),
-                    subtitle: Text(device.id),
+              return ScannerSuccessView(
+                devices: state.devices,
+                onDeviceTap: (device) {
+                  context.read<ScannerCubit>().stopScan();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => DeviceDetailsPage(device: device),
+                    ),
                   );
                 },
               );

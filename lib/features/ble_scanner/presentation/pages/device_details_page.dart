@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:sensio_assignment/features/ble_scanner/data/models/ble_device_model.dart';
 
 class DeviceDetailsPage extends StatelessWidget {
-  const DeviceDetailsPage({super.key});
+  final BleDeviceModel device;
+
+  const DeviceDetailsPage({
+    super.key,
+    required this.device,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Device Details'),
+        title: Text(device.name),
       ),
-      body: const Center(
-        child: Text('Device Details Page'),
+      body: Center(
+        child: Text('Device ID: ${device.id}'),
       ),
     );
   }

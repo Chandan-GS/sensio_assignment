@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color _lightBackground = Color(0xFFFAFAFA);
+  static const Color _lightBackground = Color.fromARGB(255, 255, 255, 255);
   static const Color _lightPrimary = Colors.black;
   static const Color _darkBackground = Color(0xFF121212);
   static const Color _darkPrimary = Color(0xFFFAFAFA);
@@ -25,6 +25,7 @@ class AppTheme {
         foregroundColor: _lightPrimary,
         elevation: 0,
       ),
+      cardColor: Color.fromARGB(255, 243, 243, 243),
       useMaterial3: true,
     );
   }
@@ -47,6 +48,7 @@ class AppTheme {
         foregroundColor: _darkPrimary,
         elevation: 0,
       ),
+      cardColor: Color.fromARGB(255, 25, 25, 25),
       useMaterial3: true,
     );
   }
