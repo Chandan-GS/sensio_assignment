@@ -21,9 +21,6 @@ class BleRepository {
   }
 
   Future<List<Service>> discoverServices(String deviceId) async {
-    try {
-      await _ble.clearGattCache(deviceId);
-    } catch (_) {}
     await _ble.discoverAllServices(deviceId);
     return await _ble.getDiscoveredServices(deviceId);
   }

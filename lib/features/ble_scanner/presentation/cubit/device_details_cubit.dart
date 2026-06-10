@@ -6,6 +6,7 @@ import 'package:sensio_assignment/features/ble_scanner/repository/ble_repository
 import 'package:sensio_assignment/features/ble_scanner/data/models/ble_device_model.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:sensio_assignment/core/services/foreground_task_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 part 'device_details_state.dart';
 
@@ -24,6 +25,19 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
   void _onReceiveTaskData(Object data) {
     if (data is Map<String, dynamic> && data['action'] == 'disconnect') {
       disconnect();
+    }
+  }
+
+  Future<void> checkActiveConnection() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      final prefs = await SharedPreferences.getInstance();
+      final deviceId = prefs.getString('connected_device_id');
+      final deviceName = prefs.getString('connected_device_name');
+
+      if (deviceId != null && deviceName != null) {
+        final device = BleDeviceModel(id: deviceId, name: deviceName, rssi: 0);
+        connect(device);
+      }
     }
   }
 
@@ -58,6 +72,26 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
                     DeviceDetailsConnected(device: device, services: services),
                   );
                   ForegroundServiceManager.startService(device.name);
+
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('connected_device_id', device.id);
+                  await prefs.setString('connected_device_name', device.name);
+
+                  final savedList =
+                      prefs.getStringList('saved_subscriptions') ?? [];
+                  for (final key in savedList) {
+                    final parts = key.split('|');
+                    if (parts.length == 2) {
+                      final serviceId = Uuid.parse(parts[0]);
+                      final characteristicId = Uuid.parse(parts[1]);
+                      final characteristic = QualifiedCharacteristic(
+                        characteristicId: characteristicId,
+                        serviceId: serviceId,
+                        deviceId: device.id,
+                      );
+                      _subscribeToCharacteristic(characteristic);
+                    }
+                  }
                 } catch (e) {
                   emit(
                     DeviceDetailsFailure(
@@ -88,6 +122,11 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
     final currentDevice = state.device;
     emit(DeviceDetailsDisconnecting(device: currentDevice));
     ForegroundServiceManager.stopService();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('connected_device_id');
+    await prefs.remove('connected_device_name');
+    await prefs.remove('saved_subscriptions');
     _cancelAllSubscriptions();
     await _connectionSubscription?.cancel();
     emit(DeviceDetailsDisconnected(device: currentDevice));
@@ -131,36 +170,62 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
     }
   }
 
-  void toggleNotifications(QualifiedCharacteristic characteristic) {
+  void _subscribeToCharacteristic(QualifiedCharacteristic characteristic) {
     final currentState = state;
     if (currentState is DeviceDetailsConnected) {
       final characteristicId = characteristic.characteristicId;
+      if (_notificationSubscriptions.containsKey(characteristicId)) return;
+
       final updatedNotifications = Set<Uuid>.from(
         currentState.activeNotifications,
       );
+      final subscription = _bleRepository
+          .subscribeToCharacteristic(characteristic)
+          .listen((value) {
+            final latestState = state;
+            if (latestState is DeviceDetailsConnected) {
+              final updatedValues = Map<Uuid, List<int>>.from(
+                latestState.characteristicValues,
+              );
+              updatedValues[characteristicId] = value;
+              emit(latestState.copyWith(characteristicValues: updatedValues));
+            }
+          }, onError: (error) {});
+
+      _notificationSubscriptions[characteristicId] = subscription;
+      updatedNotifications.add(characteristicId);
+      emit(currentState.copyWith(activeNotifications: updatedNotifications));
+    }
+  }
+
+  void toggleNotifications(QualifiedCharacteristic characteristic) async {
+    final currentState = state;
+    if (currentState is DeviceDetailsConnected) {
+      final characteristicId = characteristic.characteristicId;
+      final prefs = await SharedPreferences.getInstance();
+      final savedList = prefs.getStringList('saved_subscriptions') ?? [];
+      final key =
+          '${characteristic.serviceId}|${characteristic.characteristicId}';
 
       if (_notificationSubscriptions.containsKey(characteristicId)) {
         _notificationSubscriptions[characteristicId]?.cancel();
         _notificationSubscriptions.remove(characteristicId);
+
+        final updatedNotifications = Set<Uuid>.from(
+          currentState.activeNotifications,
+        );
         updatedNotifications.remove(characteristicId);
         emit(currentState.copyWith(activeNotifications: updatedNotifications));
-      } else {
-        final subscription = _bleRepository
-            .subscribeToCharacteristic(characteristic)
-            .listen((value) {
-              final latestState = state;
-              if (latestState is DeviceDetailsConnected) {
-                final updatedValues = Map<Uuid, List<int>>.from(
-                  latestState.characteristicValues,
-                );
-                updatedValues[characteristicId] = value;
-                emit(latestState.copyWith(characteristicValues: updatedValues));
-              }
-            }, onError: (error) {});
 
-        _notificationSubscriptions[characteristicId] = subscription;
-        updatedNotifications.add(characteristicId);
-        emit(currentState.copyWith(activeNotifications: updatedNotifications));
+        savedList.remove(key);
+        await prefs.setStringList('saved_subscriptions', savedList);
+      } else {
+        _subscribeToCharacteristic(characteristic);
+
+        if (!savedList.contains(key)) {
+          savedList.add(key);
+          await prefs.setStringList('saved_subscriptions', savedList);
+        }
       }
     }
   }

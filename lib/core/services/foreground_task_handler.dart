@@ -85,7 +85,10 @@ class ForegroundServiceManager {
     initService();
 
     if (await FlutterForegroundTask.isRunningService) {
-      return FlutterForegroundTask.restartService();
+      return FlutterForegroundTask.updateService(
+        notificationTitle: 'Connected to $deviceName',
+        notificationText: 'Running in the background',
+      );
     } else {
       return FlutterForegroundTask.startService(
         serviceId: 256,

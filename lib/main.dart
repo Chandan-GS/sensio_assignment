@@ -26,8 +26,8 @@ class SensioAssignmentApp extends StatelessWidget {
           BlocProvider(create: (context) => ThemeCubit()),
           BlocProvider(
             create: (context) => DeviceDetailsCubit(
-              bleRepository: RepositoryProvider.of<BleRepository>(context),
-            ),
+              bleRepository: context.read<BleRepository>(),
+            )..checkActiveConnection(),
           ),
         ],
         child: BlocBuilder<ThemeCubit, ThemeMode>(
