@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sensio_assignment/core/theme/cubit/theme_cubit.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/scanner_cubit.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/device_details_cubit.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page/screens/device_details_screen.dart';
@@ -65,42 +66,53 @@ class ScannerPage extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 24),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: BlocBuilder<DeviceDetailsCubit, DeviceDetailsState>(
-              builder: (context, detailsState) {
-                if (detailsState is DeviceDetailsConnected &&
-                    detailsState.device != null) {
-                  return IconButton(
-                    icon: const Icon(
-                      Icons.bluetooth_connected,
-                      color: Colors.green,
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              DeviceDetailsPage(device: detailsState.device!),
-                        ),
-                      );
-                    },
-                  );
-                } else if (detailsState is DeviceDetailsConnecting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+          BlocBuilder<DeviceDetailsCubit, DeviceDetailsState>(
+            builder: (context, detailsState) {
+              if (detailsState is DeviceDetailsConnected &&
+                  detailsState.device != null) {
+                return IconButton(
+                  icon: const Icon(
+                    Icons.bluetooth_connected,
+                    color: Colors.green,
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            DeviceDetailsPage(device: detailsState.device!),
                       ),
+                    );
+                  },
+                );
+              } else if (detailsState is DeviceDetailsConnecting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
           ),
+          BlocBuilder<ThemeCubit, ThemeMode>(
+            builder: (context, state) {
+              return IconButton(
+                onPressed: () {
+                  context.read<ThemeCubit>().toggleTheme();
+                },
+                icon: Icon(
+                  state == ThemeMode.light ? Icons.mode_night : Icons.sunny,
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(width: 16),
         ],
       ),
       body: BlocListener<ScannerCubit, ScannerState>(
