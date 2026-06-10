@@ -34,18 +34,8 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
                 break;
               case DeviceConnectionState.connected:
                 try {
-                  // Request High Priority to prevent the peripheral from rejecting Android's default connection parameters
-                  await _bleRepository.requestConnectionPriority(
-                    deviceId,
-                    ConnectionPriority.balanced,
-                  );
-
-                  // Request a higher MTU to ensure large payloads don't drop the connection
-                  try {
-                    await _bleRepository.requestMtu(deviceId, 512);
-                  } catch (_) {
-                    // Ignore MTU request failures, some devices don't support it
-                  }
+                  // Give the BLE stack a moment to stabilize the connection
+                  await Future.delayed(const Duration(milliseconds: 1000));
 
                   final services = await _bleRepository.discoverServices(
                     deviceId,

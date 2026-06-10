@@ -19,12 +19,12 @@ class _PulseDotState extends State<PulseDot>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
 
     _animation = Tween<double>(
-      begin: 0.4,
-      end: 1.0,
+      begin: 0.8,
+      end: 1.2,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
@@ -36,11 +36,11 @@ class _PulseDotState extends State<PulseDot>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
+    return ScaleTransition(
+      scale: _animation,
       child: Container(
-        height: 8,
-        width: 8,
+        height: 10,
+        width: 10,
         decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
