@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
@@ -8,6 +7,7 @@ import 'package:sensio_assignment/features/ble_scanner/repository/ble_repository
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/device_details_cubit.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page/widgets/pulse_dot.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page/widgets/vitals_visualizer.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page/widgets/characteristic_tile.dart';
 
 class DeviceDetailsPage extends StatelessWidget {
   final BleDeviceModel device;
@@ -38,49 +38,15 @@ class DeviceDetailsView extends StatefulWidget {
 class _DeviceDetailsViewState extends State<DeviceDetailsView> {
   final Map<Uuid, List<int>> _chartHistory = {};
 
-  String _getGattName(String uuid) {
-    final cleanUuid = uuid.toLowerCase().replaceAll('-', '');
-    if (cleanUuid.contains('2a37')) return 'Heart Rate Measurement';
-    if (cleanUuid.contains('2a19')) return 'Battery Level';
-    if (cleanUuid.contains('2a2b')) return 'Current Time';
-    if (cleanUuid.contains('2a00')) return 'Device Name';
-    if (cleanUuid.contains('2a29')) return 'Manufacturer Name';
-    if (cleanUuid.contains('2a6e')) return 'Temperature';
-    if (cleanUuid.contains('180d')) return 'Heart Rate Service';
-    if (cleanUuid.contains('2A5F')) return 'SpO2 Service';
-    if (cleanUuid.contains('1805')) return 'Current Time Service';
-    if (cleanUuid.contains('180a')) return 'Device Information Service';
-    if (cleanUuid.contains('181a')) return 'Temperature Service';
-    return 'GATT Characteristic';
-  }
-
-  IconData _getServiceIcon(String uuid) {
-    final cleanUuid = uuid.toLowerCase().replaceAll('-', '');
-    if (cleanUuid.contains('180d')) return Icons.favorite_rounded;
-    if (cleanUuid.contains('180f')) return Icons.battery_charging_full_rounded;
-    if (cleanUuid.contains('1805')) return Icons.watch_later_rounded;
-    if (cleanUuid.contains('180a')) return Icons.info_rounded;
-    if (cleanUuid.contains('181a')) return Icons.thermostat_rounded;
-    return Icons.settings_input_antenna_rounded;
-  }
-
-  int _parseNumericValue(List<int> bytes) {
-    if (bytes.isEmpty) return 0;
-    if (bytes.length == 1) return bytes.first;
-    if (bytes.length >= 2) return bytes[1];
-    return bytes.first;
-  }
-
   void _updateChartHistory(Map<Uuid, List<int>> values) {
+    final repository = context.read<BleRepository>();
     values.forEach((uuid, valueBytes) {
-      final val = _parseNumericValue(valueBytes);
-      final list = _chartHistory[uuid] ?? [];
+      final val = repository.parseNumericValue(uuid.toString(), valueBytes);
+      final list = List<int>.from(_chartHistory[uuid] ?? []);
       if (list.isEmpty || list.last != val) {
         list.add(val);
-        if (list.length > 25) {
-          list.removeAt(0);
-        }
-        _chartHistory[uuid] = List.from(list);
+        if (list.length > 25) list.removeAt(0);
+        _chartHistory[uuid] = list;
       }
     });
   }
@@ -101,9 +67,7 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
       body: BlocConsumer<DeviceDetailsCubit, DeviceDetailsState>(
         listener: (context, state) {
           if (state is DeviceDetailsConnected) {
-            setState(() {
-              _updateChartHistory(state.characteristicValues);
-            });
+            setState(() => _updateChartHistory(state.characteristicValues));
           }
         },
         builder: (context, state) {
@@ -119,7 +83,7 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
                       values: [
                         ValueDelegate.color(const [
                           '**',
-                        ], value: Theme.of(context).colorScheme.secondary),
+                        ], value: theme.colorScheme.secondary),
                       ],
                     ),
                   ),
@@ -228,6 +192,31 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
           if (state is DeviceDetailsConnected) {
             final activeNotifyIds = state.activeNotifications;
 
+            final repository = context.read<BleRepository>();
+
+            // Split services into vitals vs other
+            final vitalsServices = state.services
+                .where((s) => repository.isVitalsService(s.id.toString()))
+                .toList();
+            final otherServices = state.services
+                .where((s) => !repository.isVitalsService(s.id.toString()))
+                .toList();
+
+            // Flatten all characteristics from all vitals services
+            final vitalsCharWidgets = <Widget>[
+              for (final service in vitalsServices)
+                for (final characteristic in service.characteristics)
+                  CharacteristicTile(
+                    characteristic: characteristic,
+                    service: service,
+                    deviceId: widget.device.id,
+                    lastVal: state.characteristicValues[characteristic.id],
+                    isSubscribed: state.activeNotifications.contains(
+                      characteristic.id,
+                    ),
+                  ),
+            ];
+
             return ListView(
               padding: const EdgeInsets.only(bottom: 48),
               children: [
@@ -300,248 +289,122 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
                   ),
                 ),
 
+                // ── Live Vitals charts ────────────────────────────────────
                 if (activeNotifyIds.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: 16,
-                      top: 16,
-                      bottom: 8,
-                    ),
-                    child: Text(
-                      'Live Vitals',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
+                  _sectionHeader('Live Vitals', theme),
                   ...activeNotifyIds.map((uuid) {
                     final history = _chartHistory[uuid] ?? [];
                     if (history.isEmpty) return const SizedBox.shrink();
+                    final charUuid = repository.cleanUuid(uuid.toString());
+                    VitalType type = VitalType.unknown;
+                    if (charUuid.contains('2a37')) type = VitalType.heartRate;
+                    if (charUuid.contains('2a5f')) type = VitalType.spo2;
+                    if (charUuid.contains('2a6e')) type = VitalType.temperature;
+
                     return VitalsVisualizer(
                       key: ValueKey('chart_$uuid'),
                       values: history,
-                      title: _getGattName(uuid.toString()),
+                      title: repository.getGattName(uuid.toString()),
+                      type: type,
                     );
                   }),
                 ],
 
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
-                  child: Text(
-                    'Services & Characteristics',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurfaceVariant,
+                _sectionHeader('Services & Characteristics', theme),
+
+                if (vitalsCharWidgets.isNotEmpty)
+                  Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                    color: theme.cardColor,
+                    child: ExpansionTile(
+                      key: const PageStorageKey('vitals_expansion'),
+                      shape: const Border(),
+                      initiallyExpanded: true,
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          Icons.monitor_heart_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text(
+                        'Vitals Services',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        'Heart Rate · SpO2 · Temperature',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      childrenPadding: const EdgeInsets.all(16),
+                      children: vitalsCharWidgets,
                     ),
                   ),
-                ),
 
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: state.services.length,
-                  itemBuilder: (context, serviceIndex) {
-                    final service = state.services[serviceIndex];
-                    final serviceUuid = service.id.toString();
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
+                ...otherServices.map((service) {
+                  final serviceUuid = service.id.toString();
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                    color: theme.cardColor,
+                    child: ExpansionTile(
+                      key: PageStorageKey(serviceUuid),
+                      shape: const Border(),
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                        child: Icon(
+                          repository.getServiceIcon(serviceUuid),
+                          color: theme.colorScheme.primary,
+                          size: 20,
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                      title: Text(
+                        repository.getGattName(serviceUuid),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      elevation: 0,
-                      color: theme.cardColor,
-                      child: ExpansionTile(
-                        shape: const Border(),
-                        leading: CircleAvatar(
-                          backgroundColor:
-                              theme.colorScheme.surfaceContainerHighest,
-                          child: Icon(
-                            _getServiceIcon(serviceUuid),
-                            color: theme.colorScheme.primary,
-                            size: 20,
-                          ),
+                      subtitle: Text(
+                        serviceUuid,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontFamily: 'monospace',
                         ),
-                        title: Text(
-                          _getGattName(serviceUuid),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          serviceUuid,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        childrenPadding: const EdgeInsets.all(16),
-                        children: service.characteristics.map((characteristic) {
-                          final charUuid = characteristic.id.toString();
-                          final charName = _getGattName(charUuid);
-                          final qualChar = QualifiedCharacteristic(
-                            characteristicId: characteristic.id,
-                            serviceId: service.id,
-                            deviceId: widget.device.id,
-                          );
-
-                          final lastVal =
-                              state.characteristicValues[characteristic.id];
-                          final isSubscribed = state.activeNotifications
-                              .contains(characteristic.id);
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
+                      ),
+                      childrenPadding: const EdgeInsets.all(16),
+                      children: service.characteristics
+                          .map(
+                            (c) => CharacteristicTile(
+                              characteristic: c,
+                              service: service,
+                              deviceId: widget.device.id,
+                              lastVal: state.characteristicValues[c.id],
+                              isSubscribed: state.activeNotifications.contains(
+                                c.id,
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  charName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  charUuid,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    _buildPropertyBadge(
-                                      'READ',
-                                      characteristic.isReadable,
-                                      theme,
-                                    ),
-                                    _buildPropertyBadge(
-                                      'WRITE',
-                                      characteristic.isWritableWithResponse ||
-                                          characteristic
-                                              .isWritableWithoutResponse,
-                                      theme,
-                                    ),
-                                    _buildPropertyBadge(
-                                      'NOTIFY',
-                                      characteristic.isNotifiable,
-                                      theme,
-                                    ),
-                                    _buildPropertyBadge(
-                                      'INDICATE',
-                                      characteristic.isIndicatable,
-                                      theme,
-                                    ),
-                                  ],
-                                ),
-                                if (lastVal != null) ...[
-                                  const SizedBox(height: 16),
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.surface,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'VALUE',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Hex: ${lastVal.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ')}',
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        Text(
-                                          'Text: ${utf8.decode(lastVal, allowMalformed: true)}',
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    if (characteristic.isReadable)
-                                      ElevatedButton.icon(
-                                        onPressed: () => context
-                                            .read<DeviceDetailsCubit>()
-                                            .readCharacteristicValue(qualChar),
-                                        icon: const Icon(
-                                          Icons.arrow_downward,
-                                          size: 16,
-                                        ),
-                                        label: const Text('Read'),
-                                      ),
-                                    if (characteristic.isWritableWithResponse ||
-                                        characteristic
-                                            .isWritableWithoutResponse)
-                                      ElevatedButton.icon(
-                                        onPressed:
-                                            () {}, // Write func kept static as requested
-                                        icon: const Icon(Icons.edit, size: 16),
-                                        label: const Text('Write'),
-                                      ),
-                                    if (characteristic.isNotifiable ||
-                                        characteristic.isIndicatable)
-                                      ElevatedButton.icon(
-                                        onPressed: () => context
-                                            .read<DeviceDetailsCubit>()
-                                            .toggleNotifications(qualChar),
-                                        icon: Icon(
-                                          isSubscribed
-                                              ? Icons.notifications_active
-                                              : Icons.notifications_none,
-                                          size: 16,
-                                        ),
-                                        label: Text(
-                                          isSubscribed
-                                              ? 'Subscribed'
-                                              : 'Subscribe',
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  },
-                ),
+                          )
+                          .toList(),
+                    ),
+                  );
+                }),
               ],
             );
           }
@@ -552,20 +415,15 @@ class _DeviceDetailsViewState extends State<DeviceDetailsView> {
     );
   }
 
-  Widget _buildPropertyBadge(String label, bool isEnabled, ThemeData theme) {
-    if (!isEnabled) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(4),
-      ),
+  Widget _sectionHeader(String title, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
       child: Text(
-        label,
+        title,
         style: TextStyle(
-          fontSize: 10,
+          fontSize: 14,
           fontWeight: FontWeight.bold,
-          color: theme.colorScheme.onSurface,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );

@@ -98,10 +98,9 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
           characteristic,
           value,
         );
-        // Automatically fetch latest value post-write
         await readCharacteristicValue(characteristic);
       } catch (e) {
-        // Ignored, state preserved
+        /**ignored*/
       }
     }
   }
@@ -122,23 +121,16 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
       } else {
         final subscription = _bleRepository
             .subscribeToCharacteristic(characteristic)
-            .listen(
-              (value) {
-                final latestState = state;
-                if (latestState is DeviceDetailsConnected) {
-                  final updatedValues = Map<Uuid, List<int>>.from(
-                    latestState.characteristicValues,
-                  );
-                  updatedValues[characteristicId] = value;
-                  emit(
-                    latestState.copyWith(characteristicValues: updatedValues),
-                  );
-                }
-              },
-              onError: (error) {
-                // Ignored, keep connection active
-              },
-            );
+            .listen((value) {
+              final latestState = state;
+              if (latestState is DeviceDetailsConnected) {
+                final updatedValues = Map<Uuid, List<int>>.from(
+                  latestState.characteristicValues,
+                );
+                updatedValues[characteristicId] = value;
+                emit(latestState.copyWith(characteristicValues: updatedValues));
+              }
+            }, onError: (error) {});
 
         _notificationSubscriptions[characteristicId] = subscription;
         updatedNotifications.add(characteristicId);
