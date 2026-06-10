@@ -21,12 +21,6 @@ class BleDeviceListTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        // border: Border.all(
-        //   color: isDark
-        //       ? Colors.white.withValues(alpha: 0.05)
-        //       : Colors.black.withValues(alpha: 0.04),
-        //   width: 1,
-        // ),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

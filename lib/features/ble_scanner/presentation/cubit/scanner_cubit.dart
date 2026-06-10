@@ -11,6 +11,8 @@ part 'scanner_state.dart';
 class ScannerCubit extends Cubit<ScannerState> {
   final BleRepository _bleRepository;
   StreamSubscription? _scanSubscription;
+  Timer? _delayTimer;
+  bool _isDelayActive = false;
   final List<BleDeviceModel> _devices = [];
 
   ScannerCubit({required BleRepository bleRepository})
@@ -22,12 +24,14 @@ class ScannerCubit extends Cubit<ScannerState> {
   }
 
   void stopScan() {
+    _delayTimer?.cancel();
     _scanSubscription?.cancel();
     emit(ScannerInitial());
   }
 
   @override
   Future<void> close() {
+    _delayTimer?.cancel();
     _scanSubscription?.cancel();
     return super.close();
   }
@@ -61,6 +65,15 @@ class ScannerCubit extends Cubit<ScannerState> {
     emit(ScannerRunning());
     _devices.clear();
     await _scanSubscription?.cancel();
+    _delayTimer?.cancel();
+
+    _isDelayActive = true;
+    _delayTimer = Timer(const Duration(milliseconds: 1500), () {
+      _isDelayActive = false;
+      if (state is ScannerRunning && _devices.isNotEmpty) {
+        emit(ScannerSuccess(devices: List.from(_devices)));
+      }
+    });
 
     _scanSubscription = _bleRepository.scanDevices().listen(
       (device) {
@@ -68,10 +81,13 @@ class ScannerCubit extends Cubit<ScannerState> {
         if (!_devices.contains(model)) {
           _devices.add(model);
           _devices.sort((a, b) => b.rssi.compareTo(a.rssi));
-          emit(ScannerSuccess(devices: List.from(_devices)));
+          if (!_isDelayActive) {
+            emit(ScannerSuccess(devices: List.from(_devices)));
+          }
         }
       },
       onError: (error) {
+        _delayTimer?.cancel();
         emit(ScannerFailure(errorMessage: error.toString()));
       },
     );

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/scanner_cubit.dart';
-import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page.dart';
-import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_failure_view.dart';
-import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_initial_view.dart';
-import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_running_view.dart';
-import 'package:sensio_assignment/features/ble_scanner/presentation/widgets/scanner_success_view.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/device_details_page/screens/device_details_screen.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page/widgets/scanner_failure_view.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page/widgets/scanner_initial_view.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page/widgets/scanner_running_view.dart';
+import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page/widgets/scanner_success_view.dart';
 
 class ScannerPage extends StatelessWidget {
   const ScannerPage({super.key});
@@ -95,7 +95,6 @@ class ScannerPage extends StatelessWidget {
               return ScannerSuccessView(
                 devices: state.devices,
                 onDeviceTap: (device) {
-                  context.read<ScannerCubit>().stopScan();
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => DeviceDetailsPage(device: device),
@@ -117,19 +116,26 @@ class ScannerPage extends StatelessWidget {
       ),
       floatingActionButton: BlocBuilder<ScannerCubit, ScannerState>(
         builder: (context, state) {
-          final isScanning = state is ScannerRunning;
+          final IconData icon;
+          final VoidCallback onPressed;
+
+          if (state is ScannerRunning) {
+            icon = Icons.stop_rounded;
+            onPressed = () => context.read<ScannerCubit>().stopScan();
+          } else if (state is ScannerSuccess) {
+            icon = Icons.refresh;
+            onPressed = () => context.read<ScannerCubit>().startScan();
+          } else {
+            icon = Icons.bluetooth_searching;
+            onPressed = () => context.read<ScannerCubit>().startScan();
+          }
+
           return FloatingActionButton.large(
-            onPressed: () {
-              if (isScanning) {
-                context.read<ScannerCubit>().stopScan();
-              } else {
-                context.read<ScannerCubit>().startScan();
-              }
-            },
+            onPressed: onPressed,
             elevation: 0,
             backgroundColor: Theme.of(context).colorScheme.secondary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            child: Icon(isScanning ? Icons.stop : Icons.bluetooth_searching),
+            child: Icon(icon),
           );
         },
       ),
