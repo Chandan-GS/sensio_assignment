@@ -4,10 +4,13 @@ import 'package:sensio_assignment/features/ble_scanner/repository/ble_repository
 import 'package:sensio_assignment/features/ble_scanner/presentation/pages/scanner_page/screens/scanner_screen.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/scanner_cubit.dart';
 import 'package:sensio_assignment/features/ble_scanner/presentation/cubit/device_details_cubit.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/cubit/theme_cubit.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  FlutterForegroundTask.initCommunicationPort();
   runApp(const SensioAssignmentApp());
 }
 

@@ -4,6 +4,8 @@ import 'package:meta/meta.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:sensio_assignment/features/ble_scanner/repository/ble_repository.dart';
 import 'package:sensio_assignment/features/ble_scanner/data/models/ble_device_model.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:sensio_assignment/core/services/foreground_task_handler.dart';
 
 part 'device_details_state.dart';
 
@@ -15,15 +17,21 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
 
   DeviceDetailsCubit({required BleRepository bleRepository})
     : _bleRepository = bleRepository,
-      super(const DeviceDetailsInitial());
+      super(const DeviceDetailsInitial()) {
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+  }
+
+  void _onReceiveTaskData(Object data) {
+    if (data is Map<String, dynamic> && data['action'] == 'disconnect') {
+      disconnect();
+    }
+  }
 
   void connect(BleDeviceModel device) async {
-    // If we're already connected to a different device, disconnect first
     if (state.device != null && state.device!.id != device.id) {
       await disconnect();
     }
 
-    // If we're already connected to the same device, no-op
     if (state is DeviceDetailsConnected && state.device?.id == device.id) {
       return;
     }
@@ -49,6 +57,7 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
                   emit(
                     DeviceDetailsConnected(device: device, services: services),
                   );
+                  ForegroundServiceManager.startService(device.name);
                 } catch (e) {
                   emit(
                     DeviceDetailsFailure(
@@ -78,6 +87,7 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
   Future<void> disconnect() async {
     final currentDevice = state.device;
     emit(DeviceDetailsDisconnecting(device: currentDevice));
+    ForegroundServiceManager.stopService();
     _cancelAllSubscriptions();
     await _connectionSubscription?.cancel();
     emit(DeviceDetailsDisconnected(device: currentDevice));
@@ -164,6 +174,8 @@ class DeviceDetailsCubit extends Cubit<DeviceDetailsState> {
 
   @override
   Future<void> close() {
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+    ForegroundServiceManager.stopService();
     _cancelAllSubscriptions();
     _connectionSubscription?.cancel();
     return super.close();
